@@ -1,0 +1,239 @@
+---
+title: "Beyond the Myth: A Comparative Analysis of Media Crime Reports and Actual Crime Statistics in Toronto"
+author: 
+  - Kelly Lyu
+thanks: "Code and data are available at: ."
+date: "`r format(Sys.time(), '%d %B %Y')`"
+abstract: "This report provides vital insights into Toronto's crime patterns, which are essential for everyday decision-making. Analyzing the city's crime data achieves two goals: (1) assessing police efficiency in resolving crimes and (2) comparing actual crime statistics with media reporting. The study reveals a decrease in police effectiveness from 2014 to 2022, with theft under $5000 being the most prevalent crime, and crime was concentrated mainly in downtown Toronto. In contrast, media narratives suggest improved police effectiveness and emphasize murder as the predominant crime, misrepresenting North York as being as crime-prone as downtown. This discrepancy highlights the need for a critical evaluation of media-reported crime."
+output:
+  bookdown::pdf_document2
+format: pdf
+toc: TRUE
+bibliography: references.bib
+---
+
+## 
+
+# 1. Introduction
+
+Every Halloween, the narrative of Halloween Sadism, echoed in media reports about dangerous candy from strangers, was a staple in my household. Growing up, this stark contrast between ominous warnings and the absence of such incidents in my own experiences prompted a deeper investigation. The findings were enlightening: Halloween Sadism, often portrayed as a widespread danger, is essentially a myth, with scant evidence and minimal actual occurrences. Only a handful of cases have any loose association with this phenomenon, questioning the narrative advanced by the media.
+
+This distinction between media portrayal and reality sparked a broader inquiry: How accurately does the media depict criminal activity? With many relying on media as their primary source of crime-related knowledge, the impact of these portrayals on public perception and conduct is profound. This paper addresses this gap, mainly focusing on Toronto, a city lacking specific related research. Utilizing the Open Data Toronto dataset, it analyzes reported crime statistics from 2014 to 2022, contrasting them with media representations to elucidate the state of crime in Toronto.
+
+This paper is organized into five sections: Introduction, Data, Graph, Discussion, and Conclusion. The Introduction sets the context and outlines the objectives of the study. The data section focuses on the dataset sourced from the City of Toronto's OpenDataToronto Library, detailing the data cleaning and analysis processes undertaken. The graph section presents an analysis of crime types, their geographical distribution, and trends in crime resolution rates, supported by visual graphs. Notably, it was discovered that police efficiency in solving crime decreased, and the most common crime type is theft under \$5000; crime primarily happened in Toronto's downtown area. The Discussion section critically examines the discrepancies between the crime data and media reports. Finally, The paper summarizes its key findings, emphasizing the gap between media representations and actual crime statistics in Toronto.
+
+# 2. Data
+
+## Data Source and Collection
+
+This study uses a comprehensive dataset from the Toronto Police Services. It details every reported crime, spanning cases within and beyond Toronto, and even includes unfounded incidents. Presented in an easy-to-navigate format, it features 33,343 entries across seven key columns: ID, division, subtype, category, report year, crime count, and cleared count. Accessible through the City of Toronto's Open Portal, its latest update was on January 14, 2024, just four days before we captured it for our analysis. The dataset complies with the Municipal Freedom of Information and Protection of Privacy Act, underscoring a commitment to ethical data management and stringent privacy protocols, which is crucial to its credibility. This adherence enhances the dataset's trustworthiness and the integrity of its dissemination. Organized methodically, it provides clarity for analysis. Each crime's category and subtype are clearly defined, reducing subjective interpretation. However, it is crucial to recognize potential biases. Crimes reported in Quebec by Toronto residents may be included, potentially distorting the data. Also, underreporting, especially in cases like sexual assault due to fear or stigma, means that not all criminal activity is captured.
+
+## Data Cleaning
+
+Let us now turn to the cleaning process; upon importing the dataset into our analytical environment, we commenced by selecting key columns pertinent to our research: division, subtype, report year, count cleared, and count\_. Next, we introduced two new columns to deepen our analysis. The first one, 'unsolved_crime,' quantifies the total unresolved crimes for each data entry, calculated as the difference between the total reported crimes and those cleared. The second, 'clearance_rate,' provides a crucial metric, representing the proportion of cleared crimes relative to the total crime count. Both these columns were transformed into integer values to ensure data clarity and precision. These enhancements were integrated into the dataset, creating a refined version aptly labeled 'clean.' We converted all column names to lowercase to improve their readability. The final step in our data preparation involved saving this meticulously cleaned and transformed dataset as "cleaned_toronto_shelters.csv." This file serves as a comprehensive record for future studies, embodying a clear and well-structured representation of Toronto's crime data.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+install.packages("opendatatoronto") # For getting data
+library(opendatatoronto)
+install.packages("tidyverse")
+library(tidyverse)
+install.packages("janitor")
+library(janitor)
+install.packages("lubridate")
+library(lubridate)
+install.packages("knitr")
+library(knitr)
+install.packages("ggplot2")
+library(ggplot2)
+install.packages("scales")
+library(scales)
+
+# Get police annual statistics report package
+package <- show_package("police-annual-statistical-report-reported-crimes")
+
+
+# Load the reported crimes resources in the package
+resources <- 
+  list_package_resources("police-annual-statistical-report-reported-crimes") %>%
+  filter(name == "Reported Crimes.csv") %>%
+  get_resource()
+
+# Save data
+write_csv(x = resources, file = "Reported Crimes.csv")
+
+# Select the necessary columns from the dataset
+cleaned_data <- select(resources, DIVISION, SUBTYPE, REPORT_YEAR, COUNT_CLEARED, 
+                       COUNT_)
+
+# Remove rows with missing values
+cleaned_data <- drop_na(cleaned_data)
+
+# Add a new column 'rate_of_cleared_crime' which is the ratio of 'COUNT_CLEARED' to 'COUNT_'
+# and ensuring 'COUNT_CLEARED' and 'COUNT_' are numeric before the division
+cleaned_data <- mutate(cleaned_data, 
+        clearance_rate = as.numeric(COUNT_CLEARED) / as.numeric(COUNT_))
+
+# Convert 'clearance_rate' column to integer type for cleaner data representation
+cleaned_data$clearance_rate <- as.integer(cleaned_data$clearance_rate)
+
+# Add a new column 'unsolved crime' which is the difference value between 'COUNT_CLEARED' and 'COUNT_'
+# and ensuring 'COUNT_CLEARED' and 'COUNT_' are numeric before the division
+cleaned_data <- mutate(cleaned_data,
+        unsolved_crime = as.numeric(COUNT_) - as.numeric(COUNT_CLEARED))
+
+# Convert 'unsolved_crime' column to integer type for cleaner data representation
+cleaned_data$unsolved_crime <- as.integer(cleaned_data$unsolved_crime)
+
+# Standardize column names to lowercase for consistency
+colnames(cleaned_data) <- tolower(colnames(cleaned_data))
+
+# Summarize the 'clearance_rate'  by year
+yearly_summary <- cleaned_data %>%
+  group_by(report_year) %>%
+  summarise(
+    Total = sum(clearance_rate, na.rm = TRUE),
+    Mean = mean(clearance_rate, na.rm = TRUE))
+
+# Viewing the yearly summary table
+
+install.packages("kableExtra")
+library(kableExtra)
+
+# Define new column names
+new_col_names <- c("Year", "Total", "Average Clearance Rate")
+
+kable(yearly_summary, "latex", booktabs = TRUE, 
+      caption = "Yearly Summary of Clearance Rates", 
+      col.names = new_col_names) %>%
+  kable_styling(font_size = 9)
+
+
+# Save cleaned data
+write_csv(x = cleaned_data, file = "cleaned_toronto_shelters.csv")
+
+
+
+
+
+```
+
+Table 1 presents a 'Yearly Summary of Clearance Rates' spanning from 2014 to 2022, showing the summary statistics of the mutate variable. A significant observation from this data is the noticeable downward trend in the average clearance rates for reported crimes. In 2014, the average clearance rate was recorded at 0.228, which has markedly declined to 0.134 by 2022. This reduction in clearance rates is more effectively illustrated through visual representation.
+
+# 3. **Graph**
+
+## The Efficacy of solving crime
+
+```{r echo=FALSE, fig.cap=" Relationship between unsolved crimes for each crime subtype and year", fig.width= 9.5, fig.height=5}
+# Set up libraries
+library(ggplot2)
+
+# Create a bar plot to show the change of the unsolved crime
+ggplot(cleaned_data, aes(x = report_year, y = unsolved_crime, fill = factor(subtype))) +
+  geom_bar(stat = "identity", position = "stack") +
+  labs(x = "Year",
+       y = "Rate of Unsolved Crime Count",
+       fill = "Crime Subtype") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5)) +
+  scale_x_continuous(breaks = unique(cleaned_data$report_year))
+
+```
+
+IThis analysis focuses on police effectiveness, using two charts for illustration. Figure 1, the main chart, tracks unsolved crimes from 2014 to 2022, broken down by type. The x-axis denotes years, and the y-axis quantifies unsolved crimes. Utilizing a stacked bar chart, it offers an in-depth comparison across crime types and over the years. The data starts at just above 50,000 unsolved crimes in 2014, climbing steadily to nearly 100,000 by 2022. Despite minor dips in 2020 and 2021, the overall trend is upward, with a significant jump between 2016 and 2017. The chart's color coding effectively highlights variations among crime subtypes. Assault and theft under \$ 5,000 significantly contribute to the annual unsolved crime figures. The analysis reveals a consistent increasing trend in almost all categories, as evidenced by the larger colored sections for each subtype in 2022 compared to 2014.
+
+```{r echo=FALSE, fig.cap="Mean Rate of Cleared Crimes Over Years", fig.width=7, fig.height=3.6}
+
+# Calculating the mean rate of cleared crime for each year
+yearly_means <- cleaned_data %>%
+  group_by(report_year) %>%
+  summarise(Mean_Rate_of_Cleared_Crime = mean(clearance_rate, na.rm = TRUE))
+
+# Create a bar plot to show number of collisions by fatality
+ggplot(yearly_means, aes(x = report_year, y = Mean_Rate_of_Cleared_Crime)) +
+  geom_line(color = "blue") +
+  geom_point(color = "black") +
+  labs(title = "Mean Rate of Cleared Crimes Over Years",
+       x = "Year",
+       y = "Mean Rate of Cleared Crimes") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_continuous(breaks = unique(cleaned_data$report_year))
+
+```
+
+The data for 2020 and 2021 in Figure 1 may slightly muddle the overall trend, yet Figure 2 presents a more precise analysis. This line graph figure outlines the average crime clearance rate from 2014 to 2022. With years marked on the x-axis and the clearance rate on the y-axis, it shows an initial clearance rate of just above 0.225 in 2014, followed by a consistent decline. The rate experienced a notable drop in 2017 and continued to decrease steadily, reaching just under 0.15 by 2022.
+
+## Discussion 1
+
+The first graph reveals a modest decline in crime rates during 2020 and 2021, a period marked by the onset of the COVID-19 pandemic. This trend, however, is not mirrored in the second graph. The latter illustrates a downward trajectory in crime clearance rates. Simultaneously, the first graph shows a reduction in unsolved crimes. Analyzing these trends together, the stringent quarantine measures of the pandemic, which confined people to their homes, may have led to a decrease in overall crime rates compared to 2019. All in all, These visual data collectively suggest a decreasing trend in police effectiveness in solving crimes from 2014 through 2022. The consistent patterns in the line graph and the bar chart highlight an uninterrupted downward trend. They indicate a continuing decrease in police efficiency in solving crimes, with no immediate signs of improvement anticipated in the coming year.
+
+Conversely, research indicates that public perception of police effectiveness remains largely positive and may be affected by media. An analysis of leading Toronto media outlets, such as The Toronto Sun, The Toronto Star, and The Globe and Mail, reveals a notable trend. Despite statistics indicating a decrease in police efficiency, these publications increasingly portray police performance positively. For instance, The Toronto Sun reported 125 positive references to police actions compared to only 13 negative mentions. These data clarify how police efficacy differs between the media portrayed and the actual statistics.
+
+## The Subtype of the crime
+
+```{r echo=FALSE, fig.cap="Number of Crimes Reported in Toronto by Subtype and Year", fig.width=6, fig.height=3.2}
+
+library(ggplot2)
+library(scales)
+
+# Create a bar plot to show crime count by year and subtype
+ggplot(cleaned_data, aes(x = subtype, y = count_, fill = report_year)) +
+  geom_bar(stat = "identity", position = "stack") +
+  scale_y_continuous(labels = label_number()) +
+  scale_fill_gradientn(colors = c("#7F0000", "#FF0000", "#FF4500", "#FFA500")) +  # Darker color gradient
+  labs(title = "Crime Count by Year and Subtype",
+       x = "Subtype",
+       y = "Crime Count",
+       fill = "Year") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5),
+    axis.text.y = element_text(size = rel(0.8))  # Adjust this value to make the y-axis labels smaller
+  ) +
+  coord_flip()  # Flip the coordinates to switch x and y axes
+
+ggplot(cleaned_data, aes(x = subtype, y = count_, fill = report_year)) +
+  geom_point()+
+  theme_bw() +
+  theme(legend.key.size = unit(0.5, 'cm'))+
+  labs(x = "Year",
+       y = "Number of Shootings",
+       color = "Geographic Division"
+       ) +
+  coord_flip() 
+
+```
+
+Figure 3 displays a bar chart categorizing crime rates by type over several years. Each bar represents a different year, differentiated by color, with darker shades indicating more recent years. On the y-axis, various crime subtypes are listed, while the x-axis quantifies incident numbers. 'Theft Under \$5000' consistently shows high frequency, highlighting its prevalence. On the other hand, 'Attempted Murder' and 'Robbery - Financial' are rare, as indicated by their short bars. Subtypes like Assault, Auto Theft, and Break-and-Enter occupy intermediate positions. The data reveals a discernible trend: most crime categories exhibit an increasing pattern, as evidenced by the rising color bands in recent years.
+
+## Discussion 2
+
+Public perception often diverges from the data-driven reality of crime, a point highlighted by recent studies. High-profile crimes such as murder and aggravated assault, which dominate news cycles and capture public attention, are perceived to be more common than they are. In reality, statistical data shows that these violent crimes occur less frequently than non-violent offenses, like theft under \$5000, which predominate in crime reports. This contrast points to a significant insight: The enduring impactful crimes in society are often the more common, yet less sensational, offenses such as petty theft, despite the media's focus on more severe but rarer crimes.
+
+## The Division of the crime reported
+
+Figure 4 presents a graph that tracks crime incidents across different divisions from 2014 to 2022. The x-axis is segmented with labels ranging from D11 to D53 and an NSA category to differentiate the police divisions, while the y-axis measures the reported number of crimes. Utilizing a stacked bar chart, this visualization provides a detailed comparative analysis of crime trends within each division throughout the nine-year timeframe. The data visually identifies five police divisions---D14, D32, D51, D52, and D55---with the highest crime counts, suggesting these areas are crime hotspots. In contrast, divisions D11, D12, and D13 have comparatively lower crime figures. The remaining divisions fall in between these two extremes. Notably, divisions D51, D52, and D32 have seen a marked increase in crime rates, indicating an ongoing rise in criminal activity in these areas.
+
+```{r echo=FALSE, fig.cap=" Figure 4: Crime Count by Year and Divison", fig.width=6, fig.height=3.2}
+# Create a bar plot to show crime count by year and division
+ggplot(cleaned_data, aes(x = division, y = count_, fill = as.factor(report_year))) +
+  geom_bar(stat = "identity", position = "stack") +
+  labs(title = "Crimes by Crime Division and Year",
+       x = "Division of Crime",
+       y = "Number of Crimes",
+       fill = "Year") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Discussion 3
+
+In Figure 4, a graph tracks crime incidents across Toronto's divisions, stressing a higher crime presence in divisions D14, D32, D51, D52, and D55. The map clarifies the location of these divisions, with a notable concentration in downtown Toronto (D14, D51, D52, D55) versus a lower occurrence in North York (D32). This data contrasts with Toronto media reports, which often portray North York's crime levels as similar to downtown's. Our analysis demonstrates that North York experiences fewer crimes than the downtown area. This variance points to a media bias, suggesting North York is more crime-ridden than it is, and underscores the gap between media portrayal and actual crime statistics.
+
+# 4. Conclusion
+
+This study analyzes various types of crimes, their geographic distribution across Toronto, the most frequently reported crimes, and trends in crime resolution rates. A key observation is the diminishing efficacy of police in addressing crimes, notably theft under \$5,000, which is the most common crime in downtown Toronto. A critical issue identified is the disparity between the actual crime statistics and their representation in media reports. These findings highlight the necessity for accurate crime statistics dissemination and advocate for strategies to align media reports with factual data. Nonetheless, the study's credibility is somewhat compromised by omitting 'Crimes Against the Person' cases where the victim is unnamed, potentially distorting the overall crime picture.
+
+\newpage
+
+## \# References
